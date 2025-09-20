@@ -1,0 +1,110 @@
+name: healthcare-analyst-ai
+description: >
+  An AI-powered data explorer for synthetic healthcare data (FHIR Synthea) using BigQuery, 
+  Vertex AI, and Streamlit. Users can ask questions in natural language and receive insights, 
+  SQL analysis, and visualizations.
+
+tasks:
+  - name: setup-bigquery-connection
+    description: Configure BigQuery access using the public FHIR Synthea dataset.
+    steps:
+      - Enable BigQuery API on GCP project
+      - Ensure billing is set up (even for free tier)
+      - Access public dataset: `bigquery-public-data.fhir_synthea.*`
+      - Test sample query: SELECT * FROM `bigquery-public-data.fhir_synthea.patient` LIMIT 10
+
+  - name: build-fastapi-backend
+    description: >
+      Create a FastAPI backend to handle NL input, query BigQuery via SQL, and return 
+      data or visualizations.
+    steps:
+      - Create `/ask` endpoint to accept POST requests with a natural language query
+      - Use Vertex AI to translate NL → SQL (via prompt or model call)
+      - Run resulting SQL on BigQuery (via Python client)
+      - Return: data rows, summary, graph config (optional)
+
+  - name: integrate-vertex-llm
+    description: >
+      Use Vertex AI to generate SQL queries and explanations from natural language input.
+    steps:
+      - Enable Vertex AI API
+      - Use model `text-bison@002` or similar to generate SQL from input
+      - Define custom prompt template for translating healthcare-related queries into SQL
+      - Optionally: use LLM to also summarize the result in natural language
+
+  - name: build-streamlit-ui
+    description: Create a Streamlit frontend where users enter questions, see results, and view graphs.
+    steps:
+      - Input: text box for natural language question
+      - Button: submit query
+      - Show: table of results from SQL, optional plot (line/bar/scatter), and text explanation
+      - Optional: sidebar filters (e.g., age range, gender, date)
+
+  - name: add-visualization-layer
+    description: Generate graphs based on query output using Plotly or Altair.
+    steps:
+      - If returned data includes datetime: use line chart
+      - If returned data includes categories: use bar chart
+      - Provide backend-generated graph config (type, x, y, group)
+      - Render graph in Streamlit
+
+  - name: optimize-for-free-tier
+    description: Ensure queries and usage fit within GCP’s free tier.
+    steps:
+      - Limit queries to subset (e.g., sample 100K patients)
+      - Add query limit and date range filtering in backend
+      - Warn users if query estimated cost is high (based on bytes scanned)
+      - Monitor usage: log bytes scanned per query
+
+  - name: deploy-backend-to-cloud-run
+    description: Deploy FastAPI backend as a container to Cloud Run.
+    steps:
+      - Create Dockerfile for FastAPI app
+      - Build and push container to Artifact Registry
+      - Deploy to Cloud Run with public unauthenticated access (or secured)
+      - Set env vars for GCP credentials and project ID
+
+  - name: deploy-streamlit-app
+    description: Deploy Streamlit frontend.
+    steps:
+      - Option 1: Use Streamlit Cloud (if available)
+      - Option 2: Deploy to Cloud Run using Docker
+      - Connect frontend to backend endpoint `/ask`
+      - Add branding: title, logo (optional), footer
+
+  - name: bonus-feature-add-predictive-model
+    description: >
+      Use BigQuery ML to create a simple predictive model, e.g., predict likelihood of a condition.
+    steps:
+      - Create logistic regression model using BigQuery ML
+      - Train on subset: patient demographics + observation features
+      - Expose `/predict` endpoint for inference
+      - Integrate prediction into Streamlit UI
+
+env:
+  GCP_PROJECT_ID: "<your-project-id>"
+  BIGQUERY_DATASET: "bigquery-public-data.fhir_synthea"
+  VERTEX_MODEL: "text-bison@002"
+  REGION: "us-central1"
+
+dependencies:
+  - google-cloud-bigquery
+  - google-cloud-aiplatform
+  - google-auth
+  - fastapi
+  - uvicorn
+  - streamlit
+  - plotly
+  - pandas
+  - requests
+
+entrypoints:
+  backend: main.py
+  frontend: streamlit_app.py
+
+outputs:
+  - Fully interactive web app that accepts healthcare-related questions
+  - Generates SQL queries dynamically from natural language
+  - Returns structured data, visualizations, and textual summaries
+  - Predictive model endpoint (optional)
+  - Runs entirely on GCP within free tier (when optimized)
