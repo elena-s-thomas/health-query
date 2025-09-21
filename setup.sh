@@ -9,7 +9,7 @@ echo "================================"
 
 # Check if Python 3.11+ is installed
 python_version=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
-required_version="3.11"
+required_version="3.12"
 
 if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]; then
     echo "❌ Python 3.11+ is required. Current version: $python_version"

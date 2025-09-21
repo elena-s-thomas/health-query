@@ -3,8 +3,10 @@ import os
 import sys
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from the same directory as this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, ".env")
+load_dotenv(dotenv_path=env_path)
 
 def test_bigquery_connection():
     """Test BigQuery connection."""
@@ -29,13 +31,13 @@ def test_vertex_ai_connection():
     """Test Vertex AI connection."""
     try:
         import vertexai
-        from vertexai.language_models import TextGenerationModel
+        from vertexai.generative_models import GenerativeModel
         
         vertexai.init(project=os.getenv("GCP_PROJECT_ID"), location=os.getenv("REGION", "us-central1"))
-        model = TextGenerationModel.from_pretrained(os.getenv("VERTEX_MODEL", "text-bison@002"))
+        model = GenerativeModel(os.getenv("VERTEX_MODEL", "gemini-1.5-flash"))
         
         # Test generation
-        response = model.predict("Hello, this is a test.")
+        response = model.generate_content("Hello, this is a test.")
         
         print(f"✅ Vertex AI connection successful! Test response: {response.text[:50]}...")
         return True

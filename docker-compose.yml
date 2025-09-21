@@ -11,7 +11,7 @@ services:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
       - BIGQUERY_DATASET=${BIGQUERY_DATASET:-bigquery-public-data.fhir_synthea}
-      - VERTEX_MODEL=${VERTEX_MODEL:-text-bison@002}
+      - VERTEX_MODEL=${VERTEX_MODEL:-gemini-1.5-flash}
       - REGION=${REGION:-us-central1}
     volumes:
       - ./services:/app/services
