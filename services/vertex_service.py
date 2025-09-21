@@ -1,6 +1,6 @@
 """Vertex AI service for natural language to SQL translation."""
 import vertexai
-from vertexai.language_models import TextGenerationModel
+from vertexai.generative_models import GenerativeModel
 import logging
 from typing import Dict, Any, Optional
 
@@ -14,11 +14,20 @@ class VertexAIService:
     def __init__(self):
         """Initialize Vertex AI."""
         try:
+            # Validate configuration
+            if not Config.GCP_PROJECT_ID:
+                raise ValueError("GCP_PROJECT_ID is required for Vertex AI initialization")
+            
+            # Initialize Vertex AI
             vertexai.init(project=Config.GCP_PROJECT_ID, location=Config.REGION)
-            self.model = TextGenerationModel.from_pretrained(Config.VERTEX_MODEL)
-            logger.info(f"Vertex AI initialized with model: {Config.VERTEX_MODEL}")
+            
+            # Initialize the model
+            self.model = GenerativeModel(Config.VERTEX_MODEL)
+            logger.info(f"Vertex AI initialized successfully with model: {Config.VERTEX_MODEL}")
+            
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {e}")
+            logger.error(f"Project ID: {Config.GCP_PROJECT_ID}, Region: {Config.REGION}, Model: {Config.VERTEX_MODEL}")
             raise
     
     def generate_sql_from_natural_language(
@@ -34,12 +43,14 @@ class VertexAIService:
             logger.info(f"Generating SQL for query: {natural_language_query}")
             
             # Generate response
-            response = self.model.predict(
+            response = self.model.generate_content(
                 prompt,
-                max_output_tokens=1024,
-                temperature=0.1,  # Low temperature for more consistent SQL
-                top_p=0.8,
-                top_k=40
+                generation_config={
+                    "max_output_tokens": 1024,
+                    "temperature": 0.1,  # Low temperature for more consistent SQL
+                    "top_p": 0.8,
+                    "top_k": 40
+                }
             )
             
             # Parse the response
@@ -71,12 +82,14 @@ class VertexAIService:
             logger.info("Generating data summary")
             
             # Generate response
-            response = self.model.predict(
+            response = self.model.generate_content(
                 prompt,
-                max_output_tokens=512,
-                temperature=0.3,
-                top_p=0.8,
-                top_k=40
+                generation_config={
+                    "max_output_tokens": 512,
+                    "temperature": 0.3,
+                    "top_p": 0.8,
+                    "top_k": 40
+                }
             )
             
             summary = response.text.strip()

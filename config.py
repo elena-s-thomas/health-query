@@ -16,7 +16,7 @@ class Config:
     BIGQUERY_DATASET = os.getenv("BIGQUERY_DATASET", "bigquery-public-data.fhir_synthea")
     
     # Vertex AI Configuration
-    VERTEX_MODEL = os.getenv("VERTEX_MODEL", "text-bison@002")
+    VERTEX_MODEL = os.getenv("VERTEX_MODEL", "gemini-1.5-flash")
     REGION = os.getenv("REGION", "us-central1")
     
     # Application Configuration

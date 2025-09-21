@@ -84,7 +84,7 @@ tasks:
 env:
   GCP_PROJECT_ID: "<your-project-id>"
   BIGQUERY_DATASET: "bigquery-public-data.fhir_synthea"
-  VERTEX_MODEL: "text-bison@002"
+  VERTEX_MODEL: "gemini-1.5-flash"
   REGION: "us-central1"
 
 dependencies:
