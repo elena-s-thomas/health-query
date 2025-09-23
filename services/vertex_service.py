@@ -54,9 +54,10 @@ class VertexAIService:
             )
             
             # Parse the response
+            logger.info(f"Raw model response:\n{response.text}")
             sql_query = self._extract_sql_from_response(response.text)
-            
-            logger.info(f"Generated SQL: {sql_query}")
+
+            logger.info(f"Extracted SQL query:\n{sql_query}")
             
             return {
                 "sql_query": sql_query,
@@ -120,11 +121,13 @@ Key tables and their purposes:
 
 Guidelines:
 1. Use proper BigQuery SQL syntax
-2. Always include LIMIT clause (default 1000 if not specified)
+2. Always include a LIMIT clause (use LIMIT 1000 if not specified in the question)
 3. Use appropriate JOINs when needed
 4. Handle date filtering properly
 5. Use descriptive column aliases
-6. Return only the SQL query, no explanations
+6. Return ONLY the SQL query itself, no explanations or additional text
+7. Do not include markdown formatting or code blocks
+8. Ensure there is only ONE LIMIT clause in the entire query
 
 Natural language question: {query}
 
@@ -168,26 +171,50 @@ Summary:
     
     def _extract_sql_from_response(self, response: str) -> str:
         """Extract SQL query from model response."""
-        # Look for SQL between ```sql and ``` or just the SQL query
-        lines = response.strip().split('\n')
-        
-        # Remove markdown formatting if present
-        sql_lines = []
-        in_sql_block = False
-        
-        for line in lines:
-            if line.strip().startswith('```sql'):
-                in_sql_block = True
-                continue
-            elif line.strip().startswith('```') and in_sql_block:
-                break
-            elif in_sql_block or (not line.strip().startswith('```') and not line.strip().startswith('SQL')):
-                sql_lines.append(line)
-        
-        sql_query = '\n'.join(sql_lines).strip()
-        
-        # Ensure it ends with semicolon
+        # Clean up the response
+        response = response.strip()
+
+        # Check if the response contains code blocks
+        if '```sql' in response.lower():
+            # Extract content between ```sql and ```
+            import re
+            pattern = r'```sql\s*([\s\S]*?)```'
+            matches = re.findall(pattern, response, re.IGNORECASE)
+            if matches:
+                sql_query = matches[0].strip()
+            else:
+                # Fallback: try to find content between any ``` markers
+                pattern = r'```([\s\S]*?)```'
+                matches = re.findall(pattern, response)
+                if matches:
+                    sql_query = matches[0].strip()
+                else:
+                    sql_query = response
+        elif '```' in response:
+            # Extract content between ``` markers
+            import re
+            pattern = r'```([\s\S]*?)```'
+            matches = re.findall(pattern, response)
+            if matches:
+                sql_query = matches[0].strip()
+            else:
+                sql_query = response
+        else:
+            # No code blocks, use the entire response
+            sql_query = response
+
+        # Remove any leading/trailing whitespace and common prefixes
+        sql_query = sql_query.strip()
+
+        # Remove common prefixes like "SQL Query:", "Query:", etc.
+        import re
+        sql_query = re.sub(r'^(SQL\s*Query:|Query:|SQL:)\s*', '', sql_query, flags=re.IGNORECASE)
+
+        # Ensure it doesn't have duplicate semicolons
+        sql_query = sql_query.rstrip(';').strip()
+
+        # Add a single semicolon at the end if not present
         if not sql_query.endswith(';'):
             sql_query += ';'
-        
+
         return sql_query

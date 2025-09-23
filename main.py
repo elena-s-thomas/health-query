@@ -10,8 +10,12 @@ from services.bigquery_service import BigQueryService
 from services.vertex_service import VertexAIService
 from services.query_processor import QueryProcessor
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -96,6 +100,7 @@ async def ask_question(request: QueryRequest):
         
     except Exception as e:
         logger.error(f"Query processing failed: {e}")
+        logger.error(f"Query that failed: {request.query}")
         raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
 
 @app.get("/datasets")

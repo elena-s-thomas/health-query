@@ -32,16 +32,21 @@ class QueryProcessor:
             logger.info(f"Starting query processing for: {natural_language_query}")
             
             # Step 1: Generate SQL from natural language
+            logger.info("Step 1: Generating SQL from natural language...")
             sql_generation_result = self.vertex_service.generate_sql_from_natural_language(
                 natural_language_query
             )
             sql_query = sql_generation_result["sql_query"]
-            
+            logger.info(f"Generated SQL Query:\n{'='*60}\n{sql_query}\n{'='*60}")
+
             # Step 2: Estimate query cost (for free tier optimization)
+            logger.info("Step 2: Estimating query cost...")
             cost_estimate = self.bigquery_service.estimate_query_cost(sql_query)
             
             # Step 3: Execute SQL query
+            logger.info(f"Step 3: Executing SQL query with limit={limit}...")
             data = self.bigquery_service.execute_query(sql_query, limit=limit)
+            logger.info(f"Query returned {len(data)} rows")
             
             # Step 4: Generate visualization config if requested
             visualization_config = None
@@ -73,4 +78,7 @@ class QueryProcessor:
             
         except Exception as e:
             logger.error(f"Query processing failed: {e}")
+            logger.error(f"Failed at natural language query: {natural_language_query}")
+            if 'sql_query' in locals():
+                logger.error(f"Generated SQL that failed:\n{sql_query}")
             raise

@@ -26,12 +26,19 @@ class BigQueryService:
         """Execute a SQL query and return results."""
         try:
             start_time = time.time()
-            
-            # Add limit if specified
-            if limit:
-                query = f"{query.rstrip(';')} LIMIT {limit}"
-            
-            logger.info(f"Executing query: {query}")
+
+            # Check if query already has a LIMIT clause
+            query_upper = query.upper()
+            has_limit = 'LIMIT' in query_upper
+
+            # Only add limit if not already present and limit is specified
+            if limit and not has_limit:
+                query = f"{query.rstrip(';')} LIMIT {limit};"
+                logger.info(f"Added LIMIT {limit} to query")
+            elif limit and has_limit:
+                logger.warning(f"Query already contains LIMIT clause, not adding additional LIMIT {limit}")
+
+            logger.info(f"Executing BigQuery:\n{query}")
             
             # Execute query
             query_job = self.client.query(query)
@@ -54,27 +61,70 @@ class BigQueryService:
             raise
     
     def list_datasets(self) -> List[str]:
-        """List available datasets in the FHIR Synthea dataset."""
+        """List available tables in the FHIR Synthea dataset."""
         try:
-            # Get list of tables in the dataset
-            dataset_ref = self.client.dataset_from_string(self.dataset_id)
+            # The dataset_id is in format "project.dataset" for public datasets
+            # For bigquery-public-data.fhir_synthea, we need to handle it specially
+            parts = self.dataset_id.split('.')
+
+            if len(parts) == 2:
+                # Format: project.dataset
+                project_id = parts[0]
+                dataset_id = parts[1]
+            elif len(parts) == 1:
+                # Format: just dataset name
+                project_id = self.client.project
+                dataset_id = parts[0]
+            else:
+                # Might be a fully qualified name like bigquery-public-data.fhir_synthea
+                # Treat everything before last dot as project
+                project_id = '.'.join(parts[:-1]) if len(parts) > 1 else self.client.project
+                dataset_id = parts[-1]
+
+            # For public datasets, we need to use the full project name
+            if 'bigquery-public-data' in self.dataset_id:
+                project_id = 'bigquery-public-data'
+                dataset_id = 'fhir_synthea'
+
+            logger.info(f"Listing tables from project: {project_id}, dataset: {dataset_id}")
+
+            # Get dataset reference
+            dataset_ref = self.client.dataset(dataset_id, project=project_id)
+
+            # List tables in the dataset
             tables = list(self.client.list_tables(dataset_ref))
-            
+
             table_names = [table.table_id for table in tables]
-            logger.info(f"Found {len(table_names)} tables in dataset")
-            
+            logger.info(f"Found {len(table_names)} tables in dataset {self.dataset_id}")
+
             return table_names
-            
+
         except Exception as e:
             logger.error(f"Failed to list datasets: {e}")
+            logger.error(f"Dataset ID: {self.dataset_id}")
             raise
     
     def get_table_schema(self, table_name: str) -> List[Dict[str, Any]]:
         """Get schema information for a specific table."""
         try:
-            table_ref = self.client.dataset_from_string(self.dataset_id).table(table_name)
+            # For public datasets, handle the special formatting
+            if 'bigquery-public-data' in self.dataset_id:
+                project_id = 'bigquery-public-data'
+                dataset_id = 'fhir_synthea'
+            else:
+                parts = self.dataset_id.split('.')
+                if len(parts) == 2:
+                    project_id = parts[0]
+                    dataset_id = parts[1]
+                else:
+                    project_id = self.client.project
+                    dataset_id = self.dataset_id
+
+            # Get table reference
+            dataset_ref = self.client.dataset(dataset_id, project=project_id)
+            table_ref = dataset_ref.table(table_name)
             table = self.client.get_table(table_ref)
-            
+
             schema = []
             for field in table.schema:
                 schema.append({
@@ -83,9 +133,9 @@ class BigQueryService:
                     "mode": field.mode,
                     "description": field.description
                 })
-            
+
             return schema
-            
+
         except Exception as e:
             logger.error(f"Failed to get schema for table {table_name}: {e}")
             raise
