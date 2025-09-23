@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from typing import Dict, Any, Optional
 import time
+import os
 
 # Page configuration
 st.set_page_config(
@@ -15,8 +16,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Configuration
-BACKEND_URL = "http://localhost:8000"  # Change this for production
+# Configuration - use environment variable if available
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 def main():
     """Main Streamlit application."""

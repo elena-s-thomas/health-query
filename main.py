@@ -26,9 +26,27 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+import os
+
+# Configure CORS for production
+allowed_origins = [
+    "http://localhost:8501",
+    "http://localhost:3000",
+    "https://*.run.app",  # Allow all Cloud Run URLs
+]
+
+# Add frontend URL from environment if available
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    allowed_origins.append(frontend_url)
+
+# In development, allow all origins
+if os.getenv("ENVIRONMENT", "development") == "development":
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

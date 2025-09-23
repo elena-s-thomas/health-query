@@ -1,0 +1,51 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check Backend Health
+      id: backend-health
+      run: |
+        # Replace with your actual Cloud Run URL after first deployment
+        BACKEND_URL="https://health-analytics-backend-xxx-uc.a.run.app"
+
+        # Check if URL is placeholder
+        if [[ "$BACKEND_URL" == *"xxx"* ]]; then
+          echo "⚠️ Backend URL not yet configured. Update after first deployment."
+          exit 0
+        fi
+
+        response=$(curl -s -o /dev/null -w "%{http_code}" ${BACKEND_URL}/health)
+        if [ $response -eq 200 ]; then
+          echo "✅ Backend is healthy"
+        else
+          echo "❌ Backend health check failed with status: $response"
+          exit 1
+        fi
+
+    - name: Check Frontend Health
+      id: frontend-health
+      run: |
+        # Replace with your actual Cloud Run URL after first deployment
+        FRONTEND_URL="https://health-analytics-frontend-xxx-uc.a.run.app"
+
+        # Check if URL is placeholder
+        if [[ "$FRONTEND_URL" == *"xxx"* ]]; then
+          echo "⚠️ Frontend URL not yet configured. Update after first deployment."
+          exit 0
+        fi
+
+        response=$(curl -s -o /dev/null -w "%{http_code}" ${FRONTEND_URL})
+        if [ $response -eq 200 ]; then
+          echo "✅ Frontend is healthy"
+        else
+          echo "❌ Frontend health check failed with status: $response"
+          exit 1
+        fi
