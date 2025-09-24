@@ -5,12 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:  # Allow manual trigger from GitHub Actions UI
 
 env:
   GCP_REGION: us-central1
   REGISTRY: us-central1-docker.pkg.dev
-  BACKEND_SERVICE: health-analytics-backend
-  FRONTEND_SERVICE: health-analytics-frontend
+  BACKEND_SERVICE: healthcare-data-backend
+  FRONTEND_SERVICE: healthcare-data-frontend
 
 jobs:
   deploy:
@@ -39,25 +40,25 @@ jobs:
     - name: Build and Push Backend
       run: |
         docker build -f Dockerfile.backend \
-          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/backend:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/backend:latest .
+          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/backend:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/backend:latest .
 
-        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/backend:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/backend:latest
+        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/backend:${{ github.sha }}
+        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/backend:latest
 
     - name: Build and Push Frontend
       run: |
         docker build -f Dockerfile.frontend \
-          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/frontend:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/frontend:latest .
+          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/frontend:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/frontend:latest .
 
-        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/frontend:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/frontend:latest
+        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/frontend:${{ github.sha }}
+        docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/frontend:latest
 
     - name: Deploy Backend to Cloud Run
       run: |
         gcloud run deploy ${{ env.BACKEND_SERVICE }} \
-          --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/backend:${{ github.sha }} \
+          --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/backend:${{ github.sha }} \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --allow-unauthenticated \
@@ -85,7 +86,7 @@ jobs:
     - name: Deploy Frontend to Cloud Run
       run: |
         gcloud run deploy ${{ env.FRONTEND_SERVICE }} \
-          --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/health-analytics/frontend:${{ github.sha }} \
+          --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/frontend:${{ github.sha }} \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --allow-unauthenticated \
