@@ -2,6 +2,7 @@
 import os
 import json
 import tempfile
+import base64
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -13,15 +14,29 @@ class Config:
     # GCP Configuration
     GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 
-    # Handle credentials - can come from file path or JSON string
+    # Handle credentials - can come from file path, JSON string, or base64-encoded JSON
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     _CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    _CREDENTIALS_JSON_BASE64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON_BASE64")
 
     @classmethod
     def setup_credentials(cls):
         """Set up Google Cloud credentials from environment variables."""
+        # Try base64-encoded credentials first (from Cloud Run deployment)
+        if cls._CREDENTIALS_JSON_BASE64 and not cls.GOOGLE_APPLICATION_CREDENTIALS:
+            try:
+                # Decode base64 to get JSON string
+                decoded_json = base64.b64decode(cls._CREDENTIALS_JSON_BASE64).decode('utf-8')
+                # Write JSON to a temporary file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                    f.write(decoded_json)
+                    cls.GOOGLE_APPLICATION_CREDENTIALS = f.name
+                    # Set the environment variable for Google Cloud SDK
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = f.name
+            except Exception as e:
+                print(f"Error decoding base64 credentials: {e}")
         # If we have JSON credentials as a string but no file path, create a temp file
-        if cls._CREDENTIALS_JSON and not cls.GOOGLE_APPLICATION_CREDENTIALS:
+        elif cls._CREDENTIALS_JSON and not cls.GOOGLE_APPLICATION_CREDENTIALS:
             # Write JSON to a temporary file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
                 f.write(cls._CREDENTIALS_JSON)

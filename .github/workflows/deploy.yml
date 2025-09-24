@@ -57,21 +57,15 @@ jobs:
 
     - name: Deploy Backend to Cloud Run
       run: |
-        # Create environment variables file
-        cat > env_vars.yaml << EOF
-        GCP_PROJECT_ID: "${{ secrets.GCP_PROJECT_ID }}"
-        BIGQUERY_DATASET: "${{ secrets.BIGQUERY_DATASET }}"
-        VERTEX_MODEL: "${{ secrets.VERTEX_MODEL }}"
-        REGION: "${{ env.GCP_REGION }}"
-        GOOGLE_APPLICATION_CREDENTIALS_JSON: "${{ secrets.GCP_SA_KEY }}"
-        EOF
-        
+        # Deploy with environment variables using base64 encoding for the JSON key
+        ENCODED_KEY=$(echo '${{ secrets.GCP_SA_KEY }}' | base64 -w 0)
+
         gcloud run deploy ${{ env.BACKEND_SERVICE }} \
           --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/healthcare-data/backend:${{ github.sha }} \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --allow-unauthenticated \
-          --env-vars-file env_vars.yaml \
+          --set-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},BIGQUERY_DATASET=${{ secrets.BIGQUERY_DATASET }},VERTEX_MODEL=${{ secrets.VERTEX_MODEL }},REGION=${{ env.GCP_REGION }},GOOGLE_APPLICATION_CREDENTIALS_JSON_BASE64=$ENCODED_KEY" \
           --memory 2Gi \
           --cpu 1 \
           --min-instances 0 \
