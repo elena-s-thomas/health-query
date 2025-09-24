@@ -59,17 +59,11 @@ jobs:
       run: |
         # Create environment variables file
         cat > env_vars.yaml << EOF
-        env:
-        - name: GCP_PROJECT_ID
-          value: "${{ secrets.GCP_PROJECT_ID }}"
-        - name: BIGQUERY_DATASET
-          value: "${{ secrets.BIGQUERY_DATASET }}"
-        - name: VERTEX_MODEL
-          value: "${{ secrets.VERTEX_MODEL }}"
-        - name: REGION
-          value: "${{ env.GCP_REGION }}"
-        - name: GOOGLE_APPLICATION_CREDENTIALS_JSON
-          value: "${{ secrets.GCP_SA_KEY }}"
+        GCP_PROJECT_ID: "${{ secrets.GCP_PROJECT_ID }}"
+        BIGQUERY_DATASET: "${{ secrets.BIGQUERY_DATASET }}"
+        VERTEX_MODEL: "${{ secrets.VERTEX_MODEL }}"
+        REGION: "${{ env.GCP_REGION }}"
+        GOOGLE_APPLICATION_CREDENTIALS_JSON: "${{ secrets.GCP_SA_KEY }}"
         EOF
         
         gcloud run deploy ${{ env.BACKEND_SERVICE }} \
