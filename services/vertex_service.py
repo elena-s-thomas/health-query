@@ -109,7 +109,7 @@ You are a healthcare data analyst expert. Convert the following natural language
 
 Available dataset: {Config.BIGQUERY_DATASET}
 
-Key tables and their purposes:
+Key tables and their purposes (use EXACT table names as shown):
 - patient: Patient demographics and basic information
 - observation: Clinical observations and measurements
 - condition: Medical conditions and diagnoses
@@ -118,6 +118,20 @@ Key tables and their purposes:
 - encounter: Healthcare encounters/visits
 - organization: Healthcare organizations
 - practitioner: Healthcare providers
+
+CRITICAL TABLE NAME REQUIREMENTS:
+- Use EXACT table names: patient, observation, condition, procedure, medication_request, encounter, organization, practitioner
+- Do NOT use PascalCase like Patient, Observation, Condition, Procedure, MedicationRequest, Encounter, Organization, Practitioner
+- Do NOT use camelCase like patient, observation, condition, procedure, medicationRequest, encounter, organization, practitioner
+- Always use lowercase with underscores: medication_request (NOT MedicationRequest)
+
+CRITICAL FIELD NAME REQUIREMENTS:
+- medication_request table: Use medication.codeableConcept (NOT medicationCodeableConcept)
+- condition table: Use clinicalStatus (NOT status), use code (for condition codes)
+- For medication names: Use medication.codeableConcept.text or medication.codeableConcept.coding[0].display
+- For condition names: Use code.text or code.coding[0].display
+- For patient demographics: Use gender, birthDate, etc. (direct fields)
+- For dates: Use authoredOn, assertedDate, etc. (direct fields)
 
 IMPORTANT DATA TYPE NOTES:
 - Date fields in this FHIR dataset are stored as STRING type, not DATE type
@@ -136,6 +150,7 @@ Guidelines:
 7. Do not include markdown formatting or code blocks
 8. Ensure there is only ONE LIMIT clause in the entire query
 9. When extracting date parts (year, month, day), always use PARSE_DATE() first
+10. CRITICAL: Use exact table names as specified above (lowercase with underscores)
 
 Natural language question: {query}
 
@@ -227,6 +242,12 @@ Summary:
 
         # Post-process to fix common EXTRACT function issues with STRING dates
         sql_query = self._fix_extract_functions(sql_query)
+        
+        # Post-process to fix table name casing issues
+        sql_query = self._fix_table_name_casing(sql_query)
+        
+        # Post-process to fix field name issues
+        sql_query = self._fix_field_name_issues(sql_query)
 
         return sql_query
     
@@ -247,5 +268,78 @@ Summary:
             pattern = rf'EXTRACT\s*\(\s*([^,]+)\s+FROM\s+{field}\s*\)'
             replacement = rf'EXTRACT(\1 FROM PARSE_DATE(\'%Y-%m-%d\', {field}))'
             sql_query = re.sub(pattern, replacement, sql_query, flags=re.IGNORECASE)
+        
+        return sql_query
+    
+    def _fix_table_name_casing(self, sql_query: str) -> str:
+        """Fix table name casing to use correct lowercase with underscores format."""
+        import re
+        
+        # Define the correct table name mappings
+        table_name_mappings = {
+            # PascalCase to correct format
+            'Patient': 'patient',
+            'Observation': 'observation', 
+            'Condition': 'condition',
+            'Procedure': 'procedure',
+            'MedicationRequest': 'medication_request',
+            'Encounter': 'encounter',
+            'Organization': 'organization',
+            'Practitioner': 'practitioner',
+            
+            # camelCase to correct format
+            'medicationRequest': 'medication_request',
+        }
+        
+        # Fix table names in FROM clauses
+        for incorrect_name, correct_name in table_name_mappings.items():
+            # Pattern to match table names in FROM clauses with backticks
+            # This handles cases like: FROM `bigquery-public-data.fhir_synthea.MedicationRequest`
+            pattern = rf'`([^`]*\.){re.escape(incorrect_name)}`'
+            replacement = rf'`\1{correct_name}`'
+            sql_query = re.sub(pattern, replacement, sql_query)
+            
+            # Pattern to match table names without backticks
+            # This handles cases like: FROM bigquery-public-data.fhir_synthea.MedicationRequest
+            pattern = rf'([^`\s]*\.){re.escape(incorrect_name)}(?=\s|$|,|;)'
+            replacement = rf'\1{correct_name}'
+            sql_query = re.sub(pattern, replacement, sql_query)
+        
+        return sql_query
+    
+    def _fix_field_name_issues(self, sql_query: str) -> str:
+        """Fix common field name issues in FHIR queries."""
+        import re
+        
+        # Define field name mappings for common issues
+        field_mappings = {
+            # medication_request table field fixes
+            'medicationCodeableConcept': 'medication.codeableConcept',
+            'medicationCodeableConcept.text': 'medication.codeableConcept.text',
+            'medicationCodeableConcept.coding': 'medication.codeableConcept.coding',
+            'medicationCodeableConcept.coding[0].display': 'medication.codeableConcept.coding[0].display',
+            'medicationCodeableConcept.coding[0].code': 'medication.codeableConcept.coding[0].code',
+            
+            # condition table field fixes
+            'status': 'clinicalStatus',  # in condition table context
+            'conditionStatus': 'clinicalStatus',
+            'conditionCode': 'code',
+            'conditionCode.text': 'code.text',
+            'conditionCode.coding': 'code.coding',
+            'conditionCode.coding[0].display': 'code.coding[0].display',
+            'conditionCode.coding[0].code': 'code.coding[0].code',
+            
+            # patient table field fixes (these are usually correct, but just in case)
+            'patientGender': 'gender',
+            'patientBirthDate': 'birthDate',
+            'patientId': 'id',
+        }
+        
+        # Fix field names in SELECT, WHERE, and other clauses
+        for incorrect_field, correct_field in field_mappings.items():
+            # Pattern to match field names in various contexts
+            # This handles cases like: SELECT medicationCodeableConcept FROM ...
+            pattern = rf'\b{re.escape(incorrect_field)}\b'
+            sql_query = re.sub(pattern, correct_field, sql_query)
         
         return sql_query
