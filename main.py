@@ -77,6 +77,7 @@ class QueryResponse(BaseModel):
     visualization_config: Optional[Dict[str, Any]] = None
     execution_time: float
     bytes_scanned: Optional[int] = None
+    row_count: int
 
 @app.get("/")
 async def root():
