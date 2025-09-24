@@ -1,5 +1,7 @@
 """Configuration management for the healthcare analytics application."""
 import os
+import json
+import tempfile
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -7,10 +9,28 @@ load_dotenv()
 
 class Config:
     """Application configuration."""
-    
+
     # GCP Configuration
     GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+
+    # Handle credentials - can come from file path or JSON string
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    _CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+
+    @classmethod
+    def setup_credentials(cls):
+        """Set up Google Cloud credentials from environment variables."""
+        # If we have JSON credentials as a string but no file path, create a temp file
+        if cls._CREDENTIALS_JSON and not cls.GOOGLE_APPLICATION_CREDENTIALS:
+            # Write JSON to a temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                f.write(cls._CREDENTIALS_JSON)
+                cls.GOOGLE_APPLICATION_CREDENTIALS = f.name
+                # Set the environment variable for Google Cloud SDK
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = f.name
+        elif cls.GOOGLE_APPLICATION_CREDENTIALS:
+            # Ensure the environment variable is set for Google Cloud SDK
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = cls.GOOGLE_APPLICATION_CREDENTIALS
     
     # BigQuery Configuration
     BIGQUERY_DATASET = os.getenv("BIGQUERY_DATASET", "bigquery-public-data.fhir_synthea")

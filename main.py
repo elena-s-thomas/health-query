@@ -55,6 +55,7 @@ app.add_middleware(
 # Initialize services
 try:
     Config.validate()
+    Config.setup_credentials()  # Set up credentials from environment
     bigquery_service = BigQueryService()
     vertex_service = VertexAIService()
     query_processor = QueryProcessor(bigquery_service, vertex_service)

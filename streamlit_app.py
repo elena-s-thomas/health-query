@@ -11,7 +11,7 @@ import os
 # Page configuration
 st.set_page_config(
     page_title="Healthcare Analytics AI",
-    page_icon="🏥",
+    page_icon="⚕️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -23,8 +23,8 @@ def main():
     """Main Streamlit application."""
     
     # Header
-    st.title("🏥 Healthcare Analytics AI")
-    st.markdown("Ask questions about healthcare data in natural language and get insights, SQL analysis, and visualizations.")
+    st.title("Healthcare Analytics AI")
+    st.markdown("Healthcare Analytics AI - Powered by BigQuery, Vertex AI, and Streamlit | Data source: FHIR Synthea Public Dataset. Ask questions about healthcare data in natural language and get insights, SQL analysis, and visualizations.")
     
     # Sidebar
     with st.sidebar:
@@ -67,40 +67,28 @@ def main():
         ]
         
         for query in sample_queries:
-            if st.button(f"📝 {query}", key=f"sample_{hash(query)}"):
+            if st.button(f"{query}", key=f"sample_{hash(query)}"):
                 st.session_state.query_input = query
     
     # Main content area
-    col1, col2 = st.columns([2, 1])
+
+    st.subheader("Ask a Question 💬")
     
-    with col1:
-        st.subheader("💬 Ask a Question")
-        
-        # Query input
-        query_input = st.text_area(
-            "Enter your healthcare question:",
-            value=st.session_state.get("query_input", ""),
-            height=100,
-            placeholder="e.g., 'How many patients have diabetes?' or 'Show me the most common medications'"
-        )
-        
-        # Submit button
-        if st.button("🔍 Analyze", type="primary"):
-            if query_input.strip():
-                process_query(query_input, limit, include_viz, backend_url)
-            else:
-                st.error("Please enter a question to analyze.")
-    
-    with col2:
-        st.subheader("📊 Quick Stats")
-        display_quick_stats(backend_url)
-    
-    # Footer
-    st.markdown("---")
-    st.markdown(
-        "**Healthcare Analytics AI** - Powered by BigQuery, Vertex AI, and Streamlit | "
-        "Data source: FHIR Synthea Public Dataset"
+    # Query input
+    query_input = st.text_area(
+        "Enter your healthcare question:",
+        value=st.session_state.get("query_input", ""),
+        height=100,
+        placeholder="e.g., 'How many patients have diabetes?' or 'Show me the most common medications'"
     )
+    
+    # Submit button
+    if st.button("🔍 Analyze", type="primary"):
+        if query_input.strip():
+            process_query(query_input, limit, include_viz, backend_url)
+        else:
+            st.error("Please enter a question to analyze.")
+
 
 def process_query(query: str, limit: int, include_viz: bool, backend_url: str):
     """Process a natural language query."""
