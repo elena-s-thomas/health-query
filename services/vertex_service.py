@@ -114,20 +114,28 @@ Key tables and their purposes:
 - observation: Clinical observations and measurements
 - condition: Medical conditions and diagnoses
 - procedure: Medical procedures performed
-- medication: Medications prescribed
+- medication_request: Medications prescribed
 - encounter: Healthcare encounters/visits
 - organization: Healthcare organizations
 - practitioner: Healthcare providers
+
+IMPORTANT DATA TYPE NOTES:
+- Date fields in this FHIR dataset are stored as STRING type, not DATE type
+- When using EXTRACT() function on date fields, you MUST first convert them to DATE using PARSE_DATE()
+- Common date fields: birthDate (patient table), assertedDate (condition table)
+- For EXTRACT operations, use: EXTRACT(YEAR FROM PARSE_DATE('%Y-%m-%d', date_field))
+- For date comparisons, use: PARSE_DATE('%Y-%m-%d', date_field) >= DATE('2020-01-01')
 
 Guidelines:
 1. Use proper BigQuery SQL syntax
 2. Always include a LIMIT clause (use LIMIT 1000 if not specified in the question)
 3. Use appropriate JOINs when needed
-4. Handle date filtering properly
+4. Handle date filtering properly - convert STRING dates to DATE using PARSE_DATE()
 5. Use descriptive column aliases
 6. Return ONLY the SQL query itself, no explanations or additional text
 7. Do not include markdown formatting or code blocks
 8. Ensure there is only ONE LIMIT clause in the entire query
+9. When extracting date parts (year, month, day), always use PARSE_DATE() first
 
 Natural language question: {query}
 
@@ -217,4 +225,27 @@ Summary:
         if not sql_query.endswith(';'):
             sql_query += ';'
 
+        # Post-process to fix common EXTRACT function issues with STRING dates
+        sql_query = self._fix_extract_functions(sql_query)
+
+        return sql_query
+    
+    def _fix_extract_functions(self, sql_query: str) -> str:
+        """Fix EXTRACT functions to handle STRING date fields properly."""
+        import re
+        
+        # Common date fields that are STRINGs in the FHIR dataset
+        string_date_fields = [
+            'birthDate', 'assertedDate', 'effectiveDateTime', 'issued', 
+            'start', 'end', 'date', 'onsetDateTime', 'abatementDateTime'
+        ]
+        
+        # Pattern to match EXTRACT functions with STRING date fields
+        # This will match: EXTRACT(YEAR FROM birthDate) -> EXTRACT(YEAR FROM PARSE_DATE('%Y-%m-%d', birthDate))
+        for field in string_date_fields:
+            # Match EXTRACT with the field name
+            pattern = rf'EXTRACT\s*\(\s*([^,]+)\s+FROM\s+{field}\s*\)'
+            replacement = rf'EXTRACT(\1 FROM PARSE_DATE(\'%Y-%m-%d\', {field}))'
+            sql_query = re.sub(pattern, replacement, sql_query, flags=re.IGNORECASE)
+        
         return sql_query
