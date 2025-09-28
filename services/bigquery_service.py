@@ -58,6 +58,10 @@ class BigQueryService:
             
         except Exception as e:
             logger.error(f"Query execution failed: {e}")
+            logger.error(f"Failed query:\n{query}")
+            # Add more specific error information for STRUCT field issues
+            if "Field name" in str(e) and "does not exist in STRUCT" in str(e):
+                logger.error("This appears to be a STRUCT field reference issue. Check if the query is trying to access non-existent nested fields.")
             raise
     
     def list_datasets(self) -> List[str]:
@@ -127,12 +131,25 @@ class BigQueryService:
 
             schema = []
             for field in table.schema:
-                schema.append({
+                field_info = {
                     "name": field.name,
                     "type": field.field_type,
                     "mode": field.mode,
                     "description": field.description
-                })
+                }
+                
+                # Add nested field information for STRUCT fields
+                if field.field_type == 'STRUCT' and hasattr(field, 'fields'):
+                    field_info["nested_fields"] = []
+                    for nested_field in field.fields:
+                        field_info["nested_fields"].append({
+                            "name": nested_field.name,
+                            "type": nested_field.field_type,
+                            "mode": nested_field.mode,
+                            "description": nested_field.description
+                        })
+                
+                schema.append(field_info)
 
             return schema
 

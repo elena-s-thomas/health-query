@@ -31,10 +31,15 @@ class QueryProcessor:
         try:
             logger.info(f"Starting query processing for: {natural_language_query}")
             
-            # Step 1: Generate SQL from natural language
-            logger.info("Step 1: Generating SQL from natural language...")
+            # Step 0: Get all table schemas for accurate SQL generation
+            logger.info("Step 0: Fetching all table schemas...")
+            table_schemas = self._get_all_table_schemas()
+            logger.info(f"Retrieved schemas for {len(table_schemas)} tables")
+            
+            # Step 1: Generate SQL from natural language with schema information
+            logger.info("Step 1: Generating SQL from natural language with schema data...")
             sql_generation_result = self.vertex_service.generate_sql_from_natural_language(
-                natural_language_query
+                natural_language_query, table_schemas
             )
             sql_query = sql_generation_result["sql_query"]
             logger.info(f"Generated SQL Query:\n{'='*60}\n{sql_query}\n{'='*60}")
@@ -82,3 +87,26 @@ class QueryProcessor:
             if 'sql_query' in locals():
                 logger.error(f"Generated SQL that failed:\n{sql_query}")
             raise
+    
+    def _get_all_table_schemas(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Get schema information for all available tables."""
+        try:
+            # Get all available tables
+            all_tables = self.bigquery_service.list_datasets()
+            logger.info(f"Available tables: {all_tables}")
+            
+            # Fetch schemas for all tables
+            table_schemas = {}
+            for table_name in all_tables:
+                try:
+                    schema = self.bigquery_service.get_table_schema(table_name)
+                    table_schemas[table_name] = schema
+                    logger.info(f"Retrieved schema for {table_name}: {len(schema)} fields")
+                except Exception as e:
+                    logger.warning(f"Failed to get schema for {table_name}: {e}")
+            
+            return table_schemas
+            
+        except Exception as e:
+            logger.error(f"Failed to get table schemas: {e}")
+            return {}

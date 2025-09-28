@@ -133,6 +133,13 @@ CRITICAL FIELD NAME REQUIREMENTS:
 - For patient demographics: Use gender, birthDate, etc. (direct fields)
 - For dates: Use authoredOn, assertedDate, etc. (direct fields)
 
+CRITICAL STRUCT FIELD WARNINGS:
+- NEVER assume STRUCT fields have an 'id' field unless explicitly confirmed
+- Common STRUCT fields: medication.codeableConcept, code.coding, identifier
+- When accessing nested STRUCT fields, use dot notation: struct_field.nested_field
+- If you need to reference a record identifier, use the top-level 'id' field, not nested STRUCT.id
+- Always use the exact field names as they appear in the schema
+
 IMPORTANT DATA TYPE NOTES:
 - Date fields in this FHIR dataset are stored as STRING type, not DATE type
 - When using EXTRACT() function on date fields, you MUST first convert them to DATE using PARSE_DATE()
@@ -158,11 +165,35 @@ SQL Query:
 """
         
         if table_schemas:
-            schema_info = "\n\nTable schemas:\n"
+            schema_info = "\n\nACTUAL TABLE SCHEMAS (use these exact field names):\n"
             for table, schema in table_schemas.items():
                 schema_info += f"\n{table}:\n"
                 for field in schema:
-                    schema_info += f"  - {field['name']} ({field['type']}): {field.get('description', 'No description')}\n"
+                    field_name = field['name']
+                    field_type = field['type']
+                    field_mode = field.get('mode', 'NULLABLE')
+                    description = field.get('description', 'No description')
+                    
+                    schema_info += f"  - {field_name} ({field_type}, {field_mode}): {description}\n"
+                    
+                    # Add special notes for STRUCT fields
+                    if 'STRUCT' in field_type:
+                        schema_info += f"    ⚠️  STRUCT field - do NOT assume it has an 'id' field\n"
+                        schema_info += f"    ⚠️  Use dot notation to access nested fields: {field_name}.nested_field\n"
+                        
+                        # Show nested fields if available
+                        if 'nested_fields' in field:
+                            schema_info += f"    Available nested fields:\n"
+                            for nested_field in field['nested_fields']:
+                                nested_name = nested_field['name']
+                                nested_type = nested_field['type']
+                                schema_info += f"      - {field_name}.{nested_name} ({nested_type})\n"
+            
+            schema_info += "\nCRITICAL SCHEMA RULES:\n"
+            schema_info += "- Use ONLY the field names listed above\n"
+            schema_info += "- NEVER reference fields that are not in the schema\n"
+            schema_info += "- For STRUCT fields, only use the nested fields that actually exist\n"
+            schema_info += "- If you need a record ID, use the top-level 'id' field, not STRUCT.id\n"
             
             base_prompt += schema_info
         
@@ -248,6 +279,9 @@ Summary:
         
         # Post-process to fix field name issues
         sql_query = self._fix_field_name_issues(sql_query)
+        
+        # Post-process to fix STRUCT field issues
+        sql_query = self._fix_struct_field_issues(sql_query)
 
         return sql_query
     
@@ -341,5 +375,44 @@ Summary:
             # This handles cases like: SELECT medicationCodeableConcept FROM ...
             pattern = rf'\b{re.escape(incorrect_field)}\b'
             sql_query = re.sub(pattern, correct_field, sql_query)
+        
+        return sql_query
+    
+    def _fix_struct_field_issues(self, sql_query: str) -> str:
+        """Fix common STRUCT field issues that cause BigQuery errors."""
+        import re
+        
+        # Common problematic patterns where AI assumes STRUCT fields have 'id'
+        struct_field_fixes = {
+            # Fix cases where AI tries to access .id on STRUCT fields that don't have it
+            r'medication\.codeableConcept\.id': 'medication.codeableConcept',  # Remove .id
+            r'code\.coding\[0\]\.id': 'code.coding[0]',  # Remove .id
+            r'identifier\.id': 'identifier',  # Remove .id
+            r'coding\[0\]\.id': 'coding[0]',  # Remove .id
+            
+            # Fix cases where AI tries to access non-existent nested fields
+            r'medication\.codeableConcept\.identifier': 'medication.codeableConcept',
+            r'code\.coding\[0\]\.identifier': 'code.coding[0]',
+        }
+        
+        # Apply fixes
+        for pattern, replacement in struct_field_fixes.items():
+            sql_query = re.sub(pattern, replacement, sql_query)
+        
+        # Additional fix: If the query is trying to select or reference STRUCT.id,
+        # replace with the top-level id field
+        # This handles cases like: SELECT medication.codeableConcept.id FROM medication_request
+        # Should become: SELECT id FROM medication_request
+        
+        # Pattern to match SELECT statements with STRUCT.id references
+        select_pattern = r'SELECT\s+([^,]*\.id[^,]*)'
+        def replace_struct_id(match):
+            # If it's a STRUCT.id reference, replace with just 'id'
+            field_ref = match.group(1).strip()
+            if '.' in field_ref and field_ref.endswith('.id'):
+                return 'SELECT id'
+            return match.group(0)
+        
+        sql_query = re.sub(select_pattern, replace_struct_id, sql_query, flags=re.IGNORECASE)
         
         return sql_query
