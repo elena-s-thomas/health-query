@@ -176,6 +176,13 @@ CRITICAL SQL GENERATION RULES:
    - No markdown formatting or code blocks
    - Single LIMIT clause only
 
+8. DUPLICATE PREVENTION:
+   - For "what are the codes..." queries, use DISTINCT to avoid duplicates
+   - For "list all..." queries, use DISTINCT unless you specifically need counts
+   - Examples:
+     * "What are the codes for broken bones?" → SELECT DISTINCT code.coding[0].code FROM condition WHERE...
+     * "List all medication names" → SELECT DISTINCT medication.codeableConcept.text FROM medication_request WHERE...
+
 Natural language question: {query}
 
 SQL Query:
@@ -266,6 +273,9 @@ Summary:
         
         # Post-process to fix STRUCT field issues
         sql_query = self._fix_struct_field_issues(sql_query)
+        
+        # Post-process to add DISTINCT for code/name queries
+        sql_query = self._fix_duplicate_issues(sql_query)
 
         return sql_query
     
@@ -374,6 +384,10 @@ Summary:
             r'identifier\.id': 'identifier',  # Remove .id
             r'coding\[0\]\.id': 'coding[0]',  # Remove .id
             
+            # Fix subject field issues - subject is a STRUCT that references patient
+            r'condition\.subject\.id': 'condition.id',  # Use top-level id instead
+            r'subject\.id': 'id',  # Use top-level id instead
+            
             # Fix cases where AI tries to access non-existent nested fields
             r'medication\.codeableConcept\.identifier': 'medication.codeableConcept',
             r'code\.coding\[0\]\.identifier': 'code.coding[0]',
@@ -398,5 +412,53 @@ Summary:
             return match.group(0)
         
         sql_query = re.sub(select_pattern, replace_struct_id, sql_query, flags=re.IGNORECASE)
+        
+        return sql_query
+    
+    def _fix_duplicate_issues(self, sql_query: str) -> str:
+        """Fix duplicate issues by adding DISTINCT when appropriate."""
+        import re
+        
+        sql_upper = sql_query.upper()
+        
+        # Check if this is a query that should return unique values
+        should_add_distinct = False
+        
+        # Patterns that suggest we want unique values
+        unique_value_patterns = [
+            r'SELECT\s+.*code.*FROM',  # Queries selecting codes
+            r'SELECT\s+.*name.*FROM',  # Queries selecting names
+            r'SELECT\s+.*\.coding\[',  # Queries selecting coding arrays
+            r'SELECT\s+.*\.text.*FROM',  # Queries selecting text fields
+        ]
+        
+        # Check if SQL suggests unique values
+        for pattern in unique_value_patterns:
+            if re.search(pattern, sql_query, re.IGNORECASE):
+                should_add_distinct = True
+                break
+        
+        # Check if SQL is already using DISTINCT
+        if 'DISTINCT' in sql_upper:
+            should_add_distinct = False
+        
+        # Check if SQL is using GROUP BY (which implies uniqueness)
+        if 'GROUP BY' in sql_upper:
+            should_add_distinct = False
+        
+        # Check if SQL is using aggregate functions (COUNT, SUM, etc.)
+        aggregate_patterns = [r'\bCOUNT\b', r'\bSUM\b', r'\bAVG\b', r'\bMIN\b', r'\bMAX\b']
+        for pattern in aggregate_patterns:
+            if re.search(pattern, sql_upper):
+                should_add_distinct = False
+                break
+        
+        # Add DISTINCT if appropriate
+        if should_add_distinct:
+            # Pattern to match SELECT statements
+            select_pattern = r'SELECT\s+'
+            if re.search(select_pattern, sql_query, re.IGNORECASE):
+                sql_query = re.sub(select_pattern, 'SELECT DISTINCT ', sql_query, flags=re.IGNORECASE)
+                logger.info("Added DISTINCT to prevent duplicates")
         
         return sql_query
