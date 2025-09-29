@@ -179,9 +179,11 @@ CRITICAL SQL GENERATION RULES:
 8. DUPLICATE PREVENTION:
    - For "what are the codes..." queries, use DISTINCT to avoid duplicates
    - For "list all..." queries, use DISTINCT unless you specifically need counts
+   - For "how many..." queries, use COUNT(DISTINCT patient_id) to count unique patients
    - Examples:
      * "What are the codes for broken bones?" → SELECT DISTINCT code.coding[0].code FROM condition WHERE...
      * "List all medication names" → SELECT DISTINCT medication.codeableConcept.text FROM medication_request WHERE...
+     * "How many hip fractures?" → SELECT COUNT(DISTINCT id) FROM condition WHERE...
 
 Natural language question: {query}
 
@@ -448,10 +450,23 @@ Summary:
         
         # Check if SQL is using aggregate functions (COUNT, SUM, etc.)
         aggregate_patterns = [r'\bCOUNT\b', r'\bSUM\b', r'\bAVG\b', r'\bMIN\b', r'\bMAX\b']
+        has_aggregate = False
         for pattern in aggregate_patterns:
             if re.search(pattern, sql_upper):
-                should_add_distinct = False
+                has_aggregate = True
                 break
+        
+        # Special handling for COUNT queries - convert COUNT(*) to COUNT(DISTINCT id)
+        if has_aggregate and 'COUNT' in sql_upper:
+            # Check if it's COUNT(*) without DISTINCT
+            if re.search(r'COUNT\s*\(\s*\*\s*\)', sql_upper) and 'DISTINCT' not in sql_upper:
+                # Convert COUNT(*) to COUNT(DISTINCT id) for better patient counting
+                sql_query = re.sub(r'COUNT\s*\(\s*\*\s*\)', 'COUNT(DISTINCT id)', sql_query, flags=re.IGNORECASE)
+                logger.info("Converted COUNT(*) to COUNT(DISTINCT id) for unique patient counting")
+                return sql_query
+        
+        if has_aggregate:
+            should_add_distinct = False
         
         # Add DISTINCT if appropriate
         if should_add_distinct:
