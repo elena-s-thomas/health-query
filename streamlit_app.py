@@ -62,8 +62,7 @@ def main():
             "What medications are most frequently prescribed?",
             "How many patients have diabetes?",
             "Show me patient demographics by gender",
-            "What procedures are performed most often?",
-            "How many healthcare encounters occurred last year?"
+            "What procedures are performed most often?"
         ]
         
         for query in sample_queries:
