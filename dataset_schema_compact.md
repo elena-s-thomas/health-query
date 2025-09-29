@@ -366,6 +366,7 @@ All tables include these common fields: id, meta, identifier[], implicitRules, l
   - basedOn (Reference)
   - location (Reference<Location>)
   **Codes:**
+  - code (CodeableConcept)
   - category (CodeableConcept)
   **Other:**
   - bodySite (RECORD)
