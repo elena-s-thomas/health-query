@@ -31,15 +31,10 @@ class QueryProcessor:
         try:
             logger.info(f"Starting query processing for: {natural_language_query}")
             
-            # Step 0: Get all table schemas for accurate SQL generation
-            logger.info("Step 0: Fetching all table schemas...")
-            table_schemas = self._get_all_table_schemas()
-            logger.info(f"Retrieved schemas for {len(table_schemas)} tables")
-            
-            # Step 1: Generate SQL from natural language with schema information
-            logger.info("Step 1: Generating SQL from natural language with schema data...")
+            # Step 1: Generate SQL from natural language (using preloaded compact schema)
+            logger.info("Step 1: Generating SQL from natural language...")
             sql_generation_result = self.vertex_service.generate_sql_from_natural_language(
-                natural_language_query, table_schemas
+                natural_language_query
             )
             sql_query = sql_generation_result["sql_query"]
             logger.info(f"Generated SQL Query:\n{'='*60}\n{sql_query}\n{'='*60}")

@@ -3,6 +3,7 @@ import vertexai
 from vertexai.generative_models import GenerativeModel
 import logging
 from typing import Dict, Any, Optional
+import os
 
 from config import Config
 
@@ -10,35 +11,54 @@ logger = logging.getLogger(__name__)
 
 class VertexAIService:
     """Service for interacting with Vertex AI."""
-    
+
     def __init__(self):
         """Initialize Vertex AI."""
         try:
             # Validate configuration
             if not Config.GCP_PROJECT_ID:
                 raise ValueError("GCP_PROJECT_ID is required for Vertex AI initialization")
-            
+
             # Initialize Vertex AI
             vertexai.init(project=Config.GCP_PROJECT_ID, location=Config.REGION)
-            
+
             # Initialize the model
             self.model = GenerativeModel(Config.VERTEX_MODEL)
             logger.info(f"Vertex AI initialized successfully with model: {Config.VERTEX_MODEL}")
-            
+
+            # Load compact schema if available
+            self.schema_context = self._load_compact_schema()
+
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {e}")
             logger.error(f"Project ID: {Config.GCP_PROJECT_ID}, Region: {Config.REGION}, Model: {Config.VERTEX_MODEL}")
             raise
+
+    def _load_compact_schema(self) -> str:
+        """Load the compact schema context from file."""
+        schema_file = 'dataset_schema_compact.md'
+        try:
+            with open(schema_file, 'r') as f:
+                schema_content = f.read()
+            logger.info(f"Loaded compact schema from {schema_file}")
+            return schema_content
+        except FileNotFoundError:
+            error_msg = f"Required schema file {schema_file} not found. Run 'python get_database_schema.py' to generate it."
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+        except Exception as e:
+            error_msg = f"Failed to load compact schema: {e}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
     
     def generate_sql_from_natural_language(
-        self, 
-        natural_language_query: str,
-        table_schemas: Optional[Dict[str, Any]] = None
+        self,
+        natural_language_query: str
     ) -> Dict[str, Any]:
         """Generate SQL query from natural language input."""
         try:
             # Create prompt for SQL generation
-            prompt = self._create_sql_generation_prompt(natural_language_query, table_schemas)
+            prompt = self._create_sql_generation_prompt(natural_language_query)
             
             logger.info(f"Generating SQL for query: {natural_language_query}")
             
@@ -102,102 +122,66 @@ class VertexAIService:
             logger.error(f"Summary generation failed: {e}")
             return "Unable to generate summary at this time."
     
-    def _create_sql_generation_prompt(self, query: str, table_schemas: Optional[Dict[str, Any]] = None) -> str:
-        """Create a prompt for SQL generation."""
-        base_prompt = f"""
+    def _create_sql_generation_prompt(self, query: str) -> str:
+        """Create a prompt for SQL generation using compact schema."""
+
+        # Build prompt with compact schema
+        prompt = f"""
 You are a healthcare data analyst expert. Convert the following natural language question into a BigQuery SQL query.
 
 Available dataset: {Config.BIGQUERY_DATASET}
 
-Key tables and their purposes (use EXACT table names as shown):
-- patient: Patient demographics and basic information
-- observation: Clinical observations and measurements
-- condition: Medical conditions and diagnoses
-- procedure: Medical procedures performed
-- medication_request: Medications prescribed
-- encounter: Healthcare encounters/visits
-- organization: Healthcare organizations
-- practitioner: Healthcare providers
+{'=' * 60}
+DATABASE SCHEMA REFERENCE:
+{'=' * 60}
 
-CRITICAL TABLE NAME REQUIREMENTS:
-- Use EXACT table names: patient, observation, condition, procedure, medication_request, encounter, organization, practitioner
-- Do NOT use PascalCase like Patient, Observation, Condition, Procedure, MedicationRequest, Encounter, Organization, Practitioner
-- Do NOT use camelCase like patient, observation, condition, procedure, medicationRequest, encounter, organization, practitioner
-- Always use lowercase with underscores: medication_request (NOT MedicationRequest)
+{self.schema_context}
 
-CRITICAL FIELD NAME REQUIREMENTS:
-- medication_request table: Use medication.codeableConcept (NOT medicationCodeableConcept)
-- condition table: Use clinicalStatus (NOT status), use code (for condition codes)
-- For medication names: Use medication.codeableConcept.text or medication.codeableConcept.coding[0].display
-- For condition names: Use code.text or code.coding[0].display
-- For patient demographics: Use gender, birthDate, etc. (direct fields)
-- For dates: Use authoredOn, assertedDate, etc. (direct fields)
+{'=' * 60}
+CRITICAL SQL GENERATION RULES:
+{'=' * 60}
 
-CRITICAL STRUCT FIELD WARNINGS:
-- NEVER assume STRUCT fields have an 'id' field unless explicitly confirmed
-- Common STRUCT fields: medication.codeableConcept, code.coding, identifier
-- When accessing nested STRUCT fields, use dot notation: struct_field.nested_field
-- If you need to reference a record identifier, use the top-level 'id' field, not nested STRUCT.id
-- Always use the exact field names as they appear in the schema
+1. TABLE NAMES - Use exact lowercase with underscores:
+   ✓ patient, observation, condition, procedure, medication_request, encounter
+   ✗ Patient, Observation, Condition, MedicationRequest (WRONG)
 
-IMPORTANT DATA TYPE NOTES:
-- Date fields in this FHIR dataset are stored as STRING type, not DATE type
-- When using EXTRACT() function on date fields, you MUST first convert them to DATE using PARSE_DATE()
-- Common date fields: birthDate (patient table), assertedDate (condition table)
-- For EXTRACT operations, use: EXTRACT(YEAR FROM PARSE_DATE('%Y-%m-%d', date_field))
-- For date comparisons, use: PARSE_DATE('%Y-%m-%d', date_field) >= DATE('2020-01-01')
+2. COMMON FIELDS (present in all tables):
+   - id, meta, identifier[], implicitRules, language, text
 
-Guidelines:
-1. Use proper BigQuery SQL syntax
-2. Always include a LIMIT clause (use LIMIT 1000 if not specified in the question)
-3. Use appropriate JOINs when needed
-4. Handle date filtering properly - convert STRING dates to DATE using PARSE_DATE()
-5. Use descriptive column aliases
-6. Return ONLY the SQL query itself, no explanations or additional text
-7. Do not include markdown formatting or code blocks
-8. Ensure there is only ONE LIMIT clause in the entire query
-9. When extracting date parts (year, month, day), always use PARSE_DATE() first
-10. CRITICAL: Use exact table names as specified above (lowercase with underscores)
+3. DATE HANDLING - All dates are STRING type:
+   - Convert to DATE: PARSE_DATE('%Y-%m-%d', date_field)
+   - Extract parts: EXTRACT(YEAR FROM PARSE_DATE('%Y-%m-%d', birthDate))
+   - Compare: PARSE_DATE('%Y-%m-%d', date_field) >= DATE('2020-01-01')
+
+4. REFERENCE FIELDS - Use proper navigation:
+   - Reference<Patient>: Use subject.reference or subject.patientId
+   - Reference<Encounter>: Use encounter.reference or encounter.encounterId
+   - Reference<Practitioner>: Use practitioner.reference or practitioner.practitionerId
+
+5. CODEABLE CONCEPTS - Standard structure:
+   - code.text for display text
+   - code.coding[0].display for first coding display
+   - code.coding[0].code for actual code
+   - medication_request: Use medication.codeableConcept (NOT medicationCodeableConcept)
+
+6. SPECIFIC FIELD NOTES:
+   - condition: Use clinicalStatus (NOT status)
+   - Do NOT assume STRUCT fields have an 'id' field
+   - Use top-level 'id' field for record identifiers
+
+7. QUERY REQUIREMENTS:
+   - Always include LIMIT clause (default 1000)
+   - Use fully qualified table names: `{Config.BIGQUERY_DATASET}.table_name`
+   - Return ONLY the SQL query, no explanations
+   - No markdown formatting or code blocks
+   - Single LIMIT clause only
 
 Natural language question: {query}
 
 SQL Query:
 """
-        
-        if table_schemas:
-            schema_info = "\n\nACTUAL TABLE SCHEMAS (use these exact field names):\n"
-            for table, schema in table_schemas.items():
-                schema_info += f"\n{table}:\n"
-                for field in schema:
-                    field_name = field['name']
-                    field_type = field['type']
-                    field_mode = field.get('mode', 'NULLABLE')
-                    description = field.get('description', 'No description')
-                    
-                    schema_info += f"  - {field_name} ({field_type}, {field_mode}): {description}\n"
-                    
-                    # Add special notes for STRUCT fields
-                    if 'STRUCT' in field_type:
-                        schema_info += f"    ⚠️  STRUCT field - do NOT assume it has an 'id' field\n"
-                        schema_info += f"    ⚠️  Use dot notation to access nested fields: {field_name}.nested_field\n"
-                        
-                        # Show nested fields if available
-                        if 'nested_fields' in field:
-                            schema_info += f"    Available nested fields:\n"
-                            for nested_field in field['nested_fields']:
-                                nested_name = nested_field['name']
-                                nested_type = nested_field['type']
-                                schema_info += f"      - {field_name}.{nested_name} ({nested_type})\n"
-            
-            schema_info += "\nCRITICAL SCHEMA RULES:\n"
-            schema_info += "- Use ONLY the field names listed above\n"
-            schema_info += "- NEVER reference fields that are not in the schema\n"
-            schema_info += "- For STRUCT fields, only use the nested fields that actually exist\n"
-            schema_info += "- If you need a record ID, use the top-level 'id' field, not STRUCT.id\n"
-            
-            base_prompt += schema_info
-        
-        return base_prompt
+
+        return prompt
     
     def _create_summary_prompt(self, original_query: str, data: list, sql_query: str) -> str:
         """Create a prompt for data summarization."""
