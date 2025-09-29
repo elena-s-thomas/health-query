@@ -83,7 +83,7 @@ def main():
     )
     
     # Submit button
-    if st.button("🔍 Analyze", type="primary"):
+    if st.button("Analyze", type="primary"):
         if query_input.strip():
             process_query(query_input, limit, include_viz, backend_url)
         else:
@@ -93,7 +93,7 @@ def main():
 def process_query(query: str, limit: int, include_viz: bool, backend_url: str):
     """Process a natural language query."""
     
-    with st.spinner("🤖 Processing your question..."):
+    with st.spinner("Processing your question..."):
         try:
             # Prepare request
             request_data = {
@@ -118,7 +118,7 @@ def process_query(query: str, limit: int, include_viz: bool, backend_url: str):
         except requests.exceptions.ConnectionError:
             st.error("❌ Could not connect to backend. Please ensure the FastAPI server is running.")
         except requests.exceptions.Timeout:
-            st.error("⏰ Request timed out. Please try a simpler query.")
+            st.error("Request timed out. Please try a simpler query.")
         except Exception as e:
             st.error(f"❌ Unexpected error: {str(e)}")
 
@@ -126,32 +126,35 @@ def display_results(result: Dict[str, Any], original_query: str):
     """Display query results with visualizations."""
     
     # Summary
-    st.subheader("📋 Summary")
+    st.subheader("Summary")
     st.info(result["summary"])
     
     # Execution info
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("⏱️ Execution Time", f"{result['execution_time']:.2f}s")
+        st.metric("Execution Time", f"{result['execution_time']:.2f}s")
     with col2:
-        st.metric("📊 Rows Returned", result["row_count"])
+        st.metric("Rows Returned", result["row_count"])
     with col3:
         if result.get("bytes_scanned"):
-            st.metric("💾 Data Scanned", f"{result['bytes_scanned']:,} bytes")
+            st.metric("Data Scanned", f"{result['bytes_scanned']:,} bytes")
     
     # SQL Query
-    with st.expander("🔍 Generated SQL Query"):
-        st.code(result["sql_query"], language="sql")
-    
+    st.divider()
+    st.markdown("**Generated SQL Query**")
+    st.code(result["sql_query"], language="sql")
+    st.divider()
+
     # Data table
     if result["data"]:
-        st.subheader("📊 Results")
+        st.subheader("Results")
         df = pd.DataFrame(result["data"])
         st.dataframe(df, use_container_width=True)
         
         # Visualization
         if result.get("visualization_config") and result["visualization_config"]["type"] != "table":
-            st.subheader("📈 Visualization")
+            st.divider()
+            st.subheader("Visualization")
             create_visualization(result["visualization_config"])
     else:
         st.warning("No data returned from the query.")
